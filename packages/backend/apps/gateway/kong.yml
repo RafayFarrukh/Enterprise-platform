@@ -1,0 +1,283 @@
+_format_version: "3.0"
+_transform: true
+
+services:
+  # SSO Authentication Service
+  - name: sso-service
+    url: http://auth-service:3001
+    routes:
+      - name: sso-routes
+        paths:
+          - /api/v1/auth
+          - /api/v1/oauth
+        methods:
+          - GET
+          - POST
+          - PUT
+          - DELETE
+        strip_path: true
+    plugins:
+      - name: cors
+        config:
+          origins:
+            - "http://localhost:3000"
+            - "http://localhost:3001"
+            - "https://yourdomain.com"
+          methods:
+            - GET
+            - POST
+            - PUT
+            - DELETE
+            - OPTIONS
+          headers:
+            - Accept
+            - Accept-Version
+            - Content-Length
+            - Content-MD5
+            - Content-Type
+            - Date
+            - X-Auth-Token
+            - Authorization
+          credentials: true
+          max_age: 3600
+      - name: rate-limiting
+        config:
+          minute: 100
+          hour: 1000
+          policy: local
+      - name: request-size-limiting
+        config:
+          allowed_payload_size: 10
+
+  # User Service
+  - name: user-service
+    url: http://user-service:3002
+    routes:
+      - name: user-routes
+        paths:
+          - /api/v1/users
+        methods:
+          - GET
+          - POST
+          - PUT
+          - DELETE
+        strip_path: true
+    plugins:
+      - name: jwt
+        config:
+          secret_is_base64: false
+          key_claim_name: iss
+          algorithm: HS256
+      - name: cors
+        config:
+          origins:
+            - "http://localhost:3000"
+            - "http://localhost:3001"
+          methods:
+            - GET
+            - POST
+            - PUT
+            - DELETE
+            - OPTIONS
+          credentials: true
+
+  # Agency Service
+  - name: agency-service
+    url: http://agency-service:3003
+    routes:
+      - name: agency-routes
+        paths:
+          - /api/v1/agencies
+        methods:
+          - GET
+          - POST
+          - PUT
+          - DELETE
+        strip_path: true
+    plugins:
+      - name: jwt
+        config:
+          secret_is_base64: false
+          key_claim_name: iss
+          algorithm: HS256
+      - name: cors
+        config:
+          origins:
+            - "http://localhost:3000"
+            - "http://localhost:3001"
+          methods:
+            - GET
+            - POST
+            - PUT
+            - DELETE
+            - OPTIONS
+          credentials: true
+
+  # Order Service
+  - name: order-service
+    url: http://order-service:3004
+    routes:
+      - name: order-routes
+        paths:
+          - /api/v1/orders
+        methods:
+          - GET
+          - POST
+          - PUT
+          - DELETE
+        strip_path: true
+    plugins:
+      - name: jwt
+        config:
+          secret_is_base64: false
+          key_claim_name: iss
+          algorithm: HS256
+      - name: cors
+        config:
+          origins:
+            - "http://localhost:3000"
+            - "http://localhost:3001"
+          methods:
+            - GET
+            - POST
+            - PUT
+            - DELETE
+            - OPTIONS
+          credentials: true
+
+  # Chat Service
+  - name: chat-service
+    url: http://chat-service:3005
+    routes:
+      - name: chat-routes
+        paths:
+          - /api/v1/chat
+        methods:
+          - GET
+          - POST
+          - PUT
+          - DELETE
+        strip_path: true
+    plugins:
+      - name: jwt
+        config:
+          secret_is_base64: false
+          key_claim_name: iss
+          algorithm: HS256
+      - name: cors
+        config:
+          origins:
+            - "http://localhost:3000"
+            - "http://localhost:3001"
+          methods:
+            - GET
+            - POST
+            - PUT
+            - DELETE
+            - OPTIONS
+          credentials: true
+
+  # Notification Service
+  - name: notification-service
+    url: http://notification-service:3006
+    routes:
+      - name: notification-routes
+        paths:
+          - /api/v1/notifications
+        methods:
+          - GET
+          - POST
+          - PUT
+          - DELETE
+        strip_path: true
+    plugins:
+      - name: jwt
+        config:
+          secret_is_base64: false
+          key_claim_name: iss
+          algorithm: HS256
+      - name: cors
+        config:
+          origins:
+            - "http://localhost:3000"
+            - "http://localhost:3001"
+          methods:
+            - GET
+            - POST
+            - PUT
+            - DELETE
+            - OPTIONS
+          credentials: true
+
+  # File Service
+  - name: file-service
+    url: http://file-service:3007
+    routes:
+      - name: file-routes
+        paths:
+          - /api/v1/files
+        methods:
+          - GET
+          - POST
+          - PUT
+          - DELETE
+        strip_path: true
+    plugins:
+      - name: jwt
+        config:
+          secret_is_base64: false
+          key_claim_name: iss
+          algorithm: HS256
+      - name: cors
+        config:
+          origins:
+            - "http://localhost:3000"
+            - "http://localhost:3001"
+          methods:
+            - GET
+            - POST
+            - PUT
+            - DELETE
+            - OPTIONS
+          credentials: true
+
+# Global Plugins
+plugins:
+  - name: prometheus
+    config:
+      per_consumer: true
+      status_code_metrics: true
+      latency_metrics: true
+      bandwidth_metrics: true
+      upstream_health_metrics: true
+
+  - name: correlation-id
+    config:
+      header_name: "X-Correlation-ID"
+      generator: "uuid#counter"
+      echo_downstream: true
+
+  - name: request-transformer
+    config:
+      add:
+        headers:
+          - "X-Gateway: Kong"
+          - "X-Service: $(headers.host)"
+
+# Consumers (API Keys for external services)
+consumers:
+  - username: mobile-app
+    keyauth_credentials:
+      - key: "mobile-app-key-12345"
+  - username: web-app
+    keyauth_credentials:
+      - key: "web-app-key-67890"
+  - username: admin-panel
+    keyauth_credentials:
+      - key: "admin-panel-key-abcdef"
+
+# JWT Secrets for token validation
+jwt_secrets:
+  - key: "sso-service"
+    secret: "your-super-secret-jwt-key-change-this-in-production"
+    algorithm: "HS256"

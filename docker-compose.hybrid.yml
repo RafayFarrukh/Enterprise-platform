@@ -1,0 +1,288 @@
+version: '3.8'
+
+services:
+  # Kong API Gateway
+  kong:
+    image: kong:3.5
+    container_name: enterprise-kong
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: /usr/local/kong/declarative/kong.yml
+      KONG_PROXY_ACCESS_LOG: /dev/stdout
+      KONG_ADMIN_ACCESS_LOG: /dev/stdout
+      KONG_PROXY_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_LISTEN: 0.0.0.0:8001
+      KONG_ADMIN_GUI_LISTEN: 0.0.0.0:8002
+    ports:
+      - "8000:8000"   # Kong Proxy
+      - "8001:8001"   # Kong Admin API
+      - "8002:8002"   # Kong Admin GUI
+      - "8443:8443"   # Kong Proxy SSL
+      - "8444:8444"   # Kong Admin API SSL
+    volumes:
+      - ./packages/backend/apps/gateway/kong.yml:/usr/local/kong/declarative/kong.yml:ro
+    networks:
+      - enterprise-network
+    depends_on:
+      - auth-service
+      - user-service
+      - agency-service
+    restart: unless-stopped
+
+  # SSO Authentication Service
+  auth-service:
+    build:
+      context: ./packages/backend/apps/auth-service
+      dockerfile: Dockerfile
+    container_name: enterprise-auth-service
+    environment:
+      NODE_ENV: development
+      PORT: 3001
+      DATABASE_URL: mysql://root:password@mysql:3306/enterprise_sso
+      JWT_SECRET: your-super-secret-jwt-key-change-this-in-production
+      JWT_EXPIRES_IN: 15m
+      JWT_REFRESH_SECRET: your-super-secret-refresh-jwt-key-change-this-in-production
+      JWT_REFRESH_EXPIRES_IN: 7d
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      EMAIL_HOST: smtp.gmail.com
+      EMAIL_PORT: 587
+      EMAIL_USER: your-email@gmail.com
+      EMAIL_PASS: your-app-password
+      EMAIL_FROM: noreply@enterprise-platform.com
+      GOOGLE_CLIENT_ID: your-google-client-id
+      GOOGLE_CLIENT_SECRET: your-google-client-secret
+      GITHUB_CLIENT_ID: your-github-client-id
+      GITHUB_CLIENT_SECRET: your-github-client-secret
+      FACEBOOK_CLIENT_ID: your-facebook-client-id
+      FACEBOOK_CLIENT_SECRET: your-facebook-client-secret
+      LINKEDIN_CLIENT_ID: your-linkedin-client-id
+      LINKEDIN_CLIENT_SECRET: your-linkedin-client-secret
+    ports:
+      - "3001:3001"
+    networks:
+      - enterprise-network
+    depends_on:
+      - mysql
+      - redis
+    restart: unless-stopped
+    volumes:
+      - ./packages/backend/apps/auth-service:/app
+      - /app/node_modules
+
+  # User Service
+  user-service:
+    build:
+      context: ./packages/backend/apps/user-service
+      dockerfile: Dockerfile
+    container_name: enterprise-user-service
+    environment:
+      NODE_ENV: development
+      PORT: 3002
+      DATABASE_URL: mysql://root:password@mysql:3306/enterprise_users
+      JWT_SECRET: your-super-secret-jwt-key-change-this-in-production
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    ports:
+      - "3002:3002"
+    networks:
+      - enterprise-network
+    depends_on:
+      - mysql
+      - redis
+    restart: unless-stopped
+
+  # Agency Service
+  agency-service:
+    build:
+      context: ./packages/backend/apps/agency-service
+      dockerfile: Dockerfile
+    container_name: enterprise-agency-service
+    environment:
+      NODE_ENV: development
+      PORT: 3003
+      DATABASE_URL: mysql://root:password@mysql:3306/enterprise_agencies
+      JWT_SECRET: your-super-secret-jwt-key-change-this-in-production
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    ports:
+      - "3003:3003"
+    networks:
+      - enterprise-network
+    depends_on:
+      - mysql
+      - redis
+    restart: unless-stopped
+
+  # Order Service
+  order-service:
+    build:
+      context: ./packages/backend/apps/order-service
+      dockerfile: Dockerfile
+    container_name: enterprise-order-service
+    environment:
+      NODE_ENV: development
+      PORT: 3004
+      DATABASE_URL: mysql://root:password@mysql:3306/enterprise_orders
+      JWT_SECRET: your-super-secret-jwt-key-change-this-in-production
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    ports:
+      - "3004:3004"
+    networks:
+      - enterprise-network
+    depends_on:
+      - mysql
+      - redis
+    restart: unless-stopped
+
+  # Chat Service
+  chat-service:
+    build:
+      context: ./packages/backend/apps/chat-service
+      dockerfile: Dockerfile
+    container_name: enterprise-chat-service
+    environment:
+      NODE_ENV: development
+      PORT: 3005
+      DATABASE_URL: mongodb://mongodb:27017/enterprise_chat
+      JWT_SECRET: your-super-secret-jwt-key-change-this-in-production
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    ports:
+      - "3005:3005"
+    networks:
+      - enterprise-network
+    depends_on:
+      - mongodb
+      - redis
+    restart: unless-stopped
+
+  # Notification Service
+  notification-service:
+    build:
+      context: ./packages/backend/apps/notification-service
+      dockerfile: Dockerfile
+    container_name: enterprise-notification-service
+    environment:
+      NODE_ENV: development
+      PORT: 3006
+      DATABASE_URL: mysql://root:password@mysql:3306/enterprise_notifications
+      JWT_SECRET: your-super-secret-jwt-key-change-this-in-production
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    ports:
+      - "3006:3006"
+    networks:
+      - enterprise-network
+    depends_on:
+      - mysql
+      - redis
+    restart: unless-stopped
+
+  # File Service
+  file-service:
+    build:
+      context: ./packages/backend/apps/file-service
+      dockerfile: Dockerfile
+    container_name: enterprise-file-service
+    environment:
+      NODE_ENV: development
+      PORT: 3007
+      DATABASE_URL: mysql://root:password@mysql:3306/enterprise_files
+      JWT_SECRET: your-super-secret-jwt-key-change-this-in-production
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    ports:
+      - "3007:3007"
+    networks:
+      - enterprise-network
+    depends_on:
+      - mysql
+      - redis
+    restart: unless-stopped
+
+  # MySQL Database
+  mysql:
+    image: mysql:8.0
+    container_name: enterprise-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: password
+      MYSQL_DATABASE: enterprise_platform
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./packages/backend/database/migrations:/docker-entrypoint-initdb.d
+    networks:
+      - enterprise-network
+    restart: unless-stopped
+    command: --default-authentication-plugin=mysql_native_password
+
+  # MongoDB Database
+  mongodb:
+    image: mongo:7.0
+    container_name: enterprise-mongodb
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: password
+      MONGO_INITDB_DATABASE: enterprise_platform
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - enterprise-network
+    restart: unless-stopped
+
+  # Redis Cache
+  redis:
+    image: redis:7.2-alpine
+    container_name: enterprise-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - enterprise-network
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+
+  # Prometheus Monitoring
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: enterprise-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./infrastructure/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    networks:
+      - enterprise-network
+    restart: unless-stopped
+
+  # Grafana Dashboard
+  grafana:
+    image: grafana/grafana:latest
+    container_name: enterprise-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    volumes:
+      - grafana_data:/var/lib/grafana
+    networks:
+      - enterprise-network
+    restart: unless-stopped
+
+volumes:
+  mysql_data:
+  mongodb_data:
+  redis_data:
+  prometheus_data:
+  grafana_data:
+
+networks:
+  enterprise-network:
+    driver: bridge
