@@ -1,0 +1,54 @@
+version: '3.8'
+
+services:
+  auth-service:
+    build: .
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=development
+      - PORT=3001
+      - API_PREFIX=api/v1
+      - FRONTEND_URL=http://localhost:3001
+      - DATABASE_URL=mysql://root:password@mysql:3306/enterprise_sso
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - JWT_SECRET=your-super-secret-jwt-key-change-this-in-production
+      - JWT_EXPIRES_IN=15m
+      - JWT_REFRESH_SECRET=your-super-secret-refresh-jwt-key-change-this-in-production
+      - JWT_REFRESH_EXPIRES_IN=7d
+      - GOOGLE_CLIENT_ID=your-google-client-id
+      - GOOGLE_CLIENT_SECRET=your-google-client-secret
+      - GITHUB_CLIENT_ID=your-github-client-id
+      - GITHUB_CLIENT_SECRET=your-github-client-secret
+    depends_on:
+      - mysql
+      - redis
+    volumes:
+      - .:/app
+      - /app/node_modules
+    command: npm run start:dev
+
+  mysql:
+    image: mysql:8.0
+    ports:
+      - "3306:3306"
+    environment:
+      - MYSQL_ROOT_PASSWORD=password
+      - MYSQL_DATABASE=enterprise_sso
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./prisma/schema.prisma:/docker-entrypoint-initdb.d/schema.sql
+    command: --default-authentication-plugin=mysql_native_password
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+
+volumes:
+  mysql_data:
+  redis_data:

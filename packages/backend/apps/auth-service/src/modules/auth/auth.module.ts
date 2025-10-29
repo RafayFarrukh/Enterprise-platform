@@ -10,8 +10,9 @@ import { AuthController } from './controllers/auth.controller';
 
 // Services
 import { AuthService } from './services/auth.service';
-import { JwtService } from './services/jwt.service';
+import { CustomJwtService } from './services/jwt.service';
 import { OtpService } from './services/otp.service';
+import { MfaService } from './services/mfa.service';
 
 // Strategies
 import { LocalStrategy } from './strategies/local.strategy';
@@ -41,8 +42,9 @@ import { MfaGuard } from './guards/mfa.guard';
     // Services
     PrismaService,
     AuthService,
-    JwtService,
+    CustomJwtService,
     OtpService,
+    MfaService,
     
     // Strategies
     LocalStrategy,
@@ -55,8 +57,9 @@ import { MfaGuard } from './guards/mfa.guard';
   ],
   exports: [
     AuthService,
-    JwtService,
+    CustomJwtService,
     OtpService,
+    MfaService,
     JwtAuthGuard,
     RolesGuard,
     MfaGuard,

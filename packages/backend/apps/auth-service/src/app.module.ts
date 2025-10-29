@@ -6,6 +6,7 @@ import { APP_GUARD } from '@nestjs/core';
 import databaseConfig from './config/database.config';
 import jwtConfig from './config/jwt.config';
 import redisConfig from './config/redis.config';
+import environmentConfig from './config/environment.config';
 
 // Modules
 import { AuthModule } from './modules/auth/auth.module';
@@ -22,6 +23,7 @@ import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
         databaseConfig,
         jwtConfig,
         redisConfig,
+        environmentConfig,
       ],
       envFilePath: ['.env.local', '.env'],
     }),

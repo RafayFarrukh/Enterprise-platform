@@ -1,108 +1,169 @@
-import {
-  Controller,
-  Get,
-  Query,
-  Res,
-  UseGuards,
-  Request,
-} from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { Controller, Get, Post, Body, Query, UseGuards, Request, Res } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse, ApiQuery } from '@nestjs/swagger';
+import { AuthGuard } from '@nestjs/passport';
 import { Response } from 'express';
 import { OAuthService } from '../services/oauth.service';
-import { GoogleStrategy } from '../strategies/google.strategy';
-import { GithubStrategy } from '../strategies/github.strategy';
-import { AuthGuard } from '@nestjs/passport';
+import { AuthService } from '../../auth/services/auth.service';
+import { Public } from '../../auth/decorators/public.decorator';
+import { CurrentUser } from '../../auth/decorators/current-user.decorator';
 
-@ApiTags('OAuth')
-@Controller('auth/oauth')
+@ApiTags('OAuth 2.0 / OIDC')
+@Controller('oauth')
 export class OAuthController {
-  constructor(private readonly oauthService: OAuthService) {}
+  constructor(
+    private readonly oauthService: OAuthService,
+    private readonly authService: AuthService,
+  ) {}
 
+  @Public()
   @Get('google')
   @UseGuards(AuthGuard('google'))
-  @ApiOperation({ summary: 'Google OAuth Login' })
+  @ApiOperation({ summary: 'Google OAuth login' })
   @ApiResponse({ status: 302, description: 'Redirect to Google OAuth' })
   async googleAuth(@Request() req) {
-    // This will be handled by the Google strategy
+    // This will redirect to Google
   }
 
+  @Public()
   @Get('google/callback')
   @UseGuards(AuthGuard('google'))
-  @ApiOperation({ summary: 'Google OAuth Callback' })
-  @ApiResponse({ status: 302, description: 'Redirect to frontend with tokens' })
+  @ApiOperation({ summary: 'Google OAuth callback' })
+  @ApiResponse({ status: 200, description: 'Google OAuth successful' })
   async googleAuthCallback(@Request() req, @Res() res: Response) {
-    const result = await this.oauthService.handleOAuthCallback(req.user, 'google');
+    const user = await this.oauthService.validateGoogleUser(req.user);
+    const tokens = await this.oauthService.generateTokens(user.id, user.accountType);
     
     // Redirect to frontend with tokens
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
-    const redirectUrl = `${frontendUrl}/auth/callback?access_token=${result.accessToken}&refresh_token=${result.refreshToken}&user_type=${result.userType}`;
-    
+    const redirectUrl = `${process.env.FRONTEND_URL}/auth/callback?access_token=${tokens.accessToken}&refresh_token=${tokens.refreshToken}`;
     res.redirect(redirectUrl);
   }
 
+  @Public()
   @Get('github')
   @UseGuards(AuthGuard('github'))
-  @ApiOperation({ summary: 'GitHub OAuth Login' })
+  @ApiOperation({ summary: 'GitHub OAuth login' })
   @ApiResponse({ status: 302, description: 'Redirect to GitHub OAuth' })
   async githubAuth(@Request() req) {
-    // This will be handled by the GitHub strategy
+    // This will redirect to GitHub
   }
 
+  @Public()
   @Get('github/callback')
   @UseGuards(AuthGuard('github'))
-  @ApiOperation({ summary: 'GitHub OAuth Callback' })
-  @ApiResponse({ status: 302, description: 'Redirect to frontend with tokens' })
+  @ApiOperation({ summary: 'GitHub OAuth callback' })
+  @ApiResponse({ status: 200, description: 'GitHub OAuth successful' })
   async githubAuthCallback(@Request() req, @Res() res: Response) {
-    const result = await this.oauthService.handleOAuthCallback(req.user, 'github');
+    const user = await this.oauthService.validateGitHubUser(req.user);
+    const tokens = await this.oauthService.generateTokens(user.id, user.accountType);
     
     // Redirect to frontend with tokens
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
-    const redirectUrl = `${frontendUrl}/auth/callback?access_token=${result.accessToken}&refresh_token=${result.refreshToken}&user_type=${result.userType}`;
-    
+    const redirectUrl = `${process.env.FRONTEND_URL}/auth/callback?access_token=${tokens.accessToken}&refresh_token=${tokens.refreshToken}`;
     res.redirect(redirectUrl);
   }
 
-  @Get('facebook')
-  @UseGuards(AuthGuard('facebook'))
-  @ApiOperation({ summary: 'Facebook OAuth Login' })
-  @ApiResponse({ status: 302, description: 'Redirect to Facebook OAuth' })
-  async facebookAuth(@Request() req) {
-    // This will be handled by the Facebook strategy
+  @Public()
+  @Get('authorize')
+  @ApiOperation({ summary: 'OAuth 2.0 authorization endpoint' })
+  @ApiQuery({ name: 'response_type', description: 'Response type (code)' })
+  @ApiQuery({ name: 'client_id', description: 'Client ID' })
+  @ApiQuery({ name: 'redirect_uri', description: 'Redirect URI' })
+  @ApiQuery({ name: 'scope', description: 'Requested scope' })
+  @ApiQuery({ name: 'state', description: 'State parameter' })
+  @ApiResponse({ status: 200, description: 'Authorization page' })
+  async authorize(
+    @Query('response_type') responseType: string,
+    @Query('client_id') clientId: string,
+    @Query('redirect_uri') redirectUri: string,
+    @Query('scope') scope: string,
+    @Query('state') state: string,
+  ) {
+    // TODO: Implement OAuth 2.0 authorization endpoint
+    return {
+      message: 'OAuth 2.0 authorization endpoint',
+      responseType,
+      clientId,
+      redirectUri,
+      scope,
+      state,
+    };
   }
 
-  @Get('facebook/callback')
-  @UseGuards(AuthGuard('facebook'))
-  @ApiOperation({ summary: 'Facebook OAuth Callback' })
-  @ApiResponse({ status: 302, description: 'Redirect to frontend with tokens' })
-  async facebookAuthCallback(@Request() req, @Res() res: Response) {
-    const result = await this.oauthService.handleOAuthCallback(req.user, 'facebook');
-    
-    // Redirect to frontend with tokens
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
-    const redirectUrl = `${frontendUrl}/auth/callback?access_token=${result.accessToken}&refresh_token=${result.refreshToken}&user_type=${result.userType}`;
-    
-    res.redirect(redirectUrl);
+  @Public()
+  @Post('token')
+  @ApiOperation({ summary: 'OAuth 2.0 token endpoint' })
+  @ApiResponse({ status: 200, description: 'Token issued' })
+  @ApiResponse({ status: 400, description: 'Invalid request' })
+  async token(
+    @Body('grant_type') grantType: string,
+    @Body('code') code: string,
+    @Body('redirect_uri') redirectUri: string,
+    @Body('client_id') clientId: string,
+    @Body('client_secret') clientSecret: string,
+  ) {
+    // TODO: Implement OAuth 2.0 token endpoint
+    return {
+      message: 'OAuth 2.0 token endpoint',
+      grantType,
+      code,
+      redirectUri,
+      clientId,
+    };
   }
 
-  @Get('linkedin')
-  @UseGuards(AuthGuard('linkedin'))
-  @ApiOperation({ summary: 'LinkedIn OAuth Login' })
-  @ApiResponse({ status: 302, description: 'Redirect to LinkedIn OAuth' })
-  async linkedinAuth(@Request() req) {
-    // This will be handled by the LinkedIn strategy
+  @Get('userinfo')
+  @ApiOperation({ summary: 'OIDC UserInfo endpoint' })
+  @ApiResponse({ status: 200, description: 'User information' })
+  async userinfo(@CurrentUser() user: any) {
+    const profile = await this.authService.getUserProfile(user.id);
+    return {
+      sub: user.id,
+      email: profile.email,
+      email_verified: profile.emailVerified,
+      name: `${profile.firstName} ${profile.lastName}`,
+      given_name: profile.firstName,
+      family_name: profile.lastName,
+      picture: profile.profilePhoto,
+    };
   }
 
-  @Get('linkedin/callback')
-  @UseGuards(AuthGuard('linkedin'))
-  @ApiOperation({ summary: 'LinkedIn OAuth Callback' })
-  @ApiResponse({ status: 302, description: 'Redirect to frontend with tokens' })
-  async linkedinAuthCallback(@Request() req, @Res() res: Response) {
-    const result = await this.oauthService.handleOAuthCallback(req.user, 'linkedin');
+  @Get('.well-known/openid_configuration')
+  @Public()
+  @ApiOperation({ summary: 'OIDC Discovery endpoint' })
+  @ApiResponse({ status: 200, description: 'OpenID Connect configuration' })
+  async openidConfiguration() {
+    const baseUrl = process.env.API_BASE_URL || 'http://localhost:3001/api/v1';
     
-    // Redirect to frontend with tokens
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
-    const redirectUrl = `${frontendUrl}/auth/callback?access_token=${result.accessToken}&refresh_token=${result.refreshToken}&user_type=${result.userType}`;
-    
-    res.redirect(redirectUrl);
+    return {
+      issuer: baseUrl,
+      authorization_endpoint: `${baseUrl}/oauth/authorize`,
+      token_endpoint: `${baseUrl}/oauth/token`,
+      userinfo_endpoint: `${baseUrl}/oauth/userinfo`,
+      jwks_uri: `${baseUrl}/oauth/jwks`,
+      response_types_supported: ['code', 'id_token', 'token'],
+      subject_types_supported: ['public'],
+      id_token_signing_alg_values_supported: ['RS256'],
+      scopes_supported: ['openid', 'profile', 'email'],
+      claims_supported: ['sub', 'email', 'email_verified', 'name', 'given_name', 'family_name', 'picture'],
+    };
+  }
+
+  @Get('jwks')
+  @Public()
+  @ApiOperation({ summary: 'JWKS endpoint' })
+  @ApiResponse({ status: 200, description: 'JSON Web Key Set' })
+  async jwks() {
+    // TODO: Implement JWKS endpoint
+    return {
+      keys: [
+        {
+          kty: 'RSA',
+          kid: '1',
+          use: 'sig',
+          alg: 'RS256',
+          n: 'your-public-key-modulus',
+          e: 'AQAB',
+        },
+      ],
+    };
   }
 }

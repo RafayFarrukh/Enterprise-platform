@@ -1,0 +1,496 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// User Account System
+model User {
+  id                String   @id @default(cuid())
+  email             String   @unique
+  phone             String?  @unique
+  passwordHash      String?
+  emailVerified     Boolean  @default(false)
+  phoneVerified     Boolean  @default(false)
+  mfaEnabled        Boolean  @default(false)
+  mfaSecret         String?
+  status            UserStatus @default(ACTIVE)
+  lastLoginAt       DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Profile Information
+  profile           UserProfile?
+  addresses         Address[]
+  preferences       UserPreferences?
+  
+  // Authentication
+  sessions          UserSession[]
+  socialAccounts    SocialAccount[]
+  mfaBackupCodes    MfaBackupCode[]
+  
+  // OAuth
+  oauthClients      OAuthClient[]
+  oauthTokens       OAuthToken[]
+  
+  // Orders and Transactions (for future modules)
+  orders            Order[]
+  transactions      Transaction[]
+
+  @@map("users")
+}
+
+model UserProfile {
+  id                String   @id @default(cuid())
+  userId            String   @unique
+  firstName         String
+  lastName          String
+  dateOfBirth       DateTime?
+  gender            Gender?
+  nationality       String?
+  profilePhoto      String?
+  governmentId      String?
+  governmentIdType  GovernmentIdType?
+  documentUrl       String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_profiles")
+}
+
+model Address {
+  id                String   @id @default(cuid())
+  userId            String
+  type              AddressType @default(PRIMARY)
+  street            String
+  city              String
+  state             String
+  country           String
+  zipCode           String
+  isDefault         Boolean  @default(false)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("addresses")
+}
+
+model UserPreferences {
+  id                String   @id @default(cuid())
+  userId            String   @unique
+  language          String   @default("en")
+  timezone          String   @default("UTC")
+  currency          String   @default("USD")
+  notifications     Json     @default("{}")
+  theme             String   @default("light")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_preferences")
+}
+
+// Agency System
+model Agency {
+  id                String   @id @default(cuid())
+  email             String   @unique
+  phone             String?  @unique
+  passwordHash      String?
+  emailVerified     Boolean  @default(false)
+  phoneVerified     Boolean  @default(false)
+  mfaEnabled        Boolean  @default(false)
+  mfaSecret         String?
+  status            AgencyStatus @default(PENDING)
+  lastLoginAt       DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Agency Information
+  profile           AgencyProfile?
+  addresses         AgencyAddress[]
+  preferences       AgencyPreferences?
+  
+  // Authentication
+  sessions          AgencySession[]
+  socialAccounts    AgencySocialAccount[]
+  mfaBackupCodes    AgencyMfaBackupCode[]
+  
+  // OAuth
+  oauthClients      OAuthClient[]
+  oauthTokens       OAuthToken[]
+  
+  // Orders and Transactions
+  orders            Order[]
+  transactions      Transaction[]
+
+  @@map("agencies")
+}
+
+model AgencyProfile {
+  id                String   @id @default(cuid())
+  agencyId          String   @unique
+  firstName         String
+  lastName          String
+  dateOfBirth       DateTime?
+  gender            Gender?
+  nationality       String?
+  governmentId      String?
+  governmentIdType  GovernmentIdType?
+  documentUrl       String?
+  agencyName        String   @unique
+  businessType      BusinessType
+  grade             AgencyGrade @default(E)
+  ranking           Int      @default(0)
+  logo              String?
+  description       String?
+  serviceArea       Json     @default("{}")
+  supportedLanguages Json    @default("[]")
+  employeeRange     EmployeeRange?
+  businessRegNumber String?
+  taxIdNumber       String?
+  officeAddress     Json     @default("{}")
+  documents         Json     @default("[]")
+  totalDeposit      Decimal  @default(0) @db.Decimal(10, 2)
+  totalDueDeposit   Decimal  @default(0) @db.Decimal(10, 2)
+  totalPenalty      Decimal  @default(0) @db.Decimal(10, 2)
+  renewalFee        Decimal  @default(0) @db.Decimal(10, 2)
+  renewalDate       DateTime?
+  establishment     String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  agency            Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+
+  @@map("agency_profiles")
+}
+
+model AgencyAddress {
+  id                String   @id @default(cuid())
+  agencyId          String
+  type              AddressType @default(PRIMARY)
+  street            String
+  city              String
+  state             String
+  country           String
+  zipCode           String
+  isDefault         Boolean  @default(false)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  agency            Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+
+  @@map("agency_addresses")
+}
+
+model AgencyPreferences {
+  id                String   @id @default(cuid())
+  agencyId          String   @unique
+  language          String   @default("en")
+  timezone          String   @default("UTC")
+  currency          String   @default("USD")
+  notifications     Json     @default("{}")
+  theme             String   @default("light")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  agency            Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+
+  @@map("agency_preferences")
+}
+
+// Session Management
+model UserSession {
+  id                String   @id @default(cuid())
+  userId            String
+  sessionToken      String   @unique
+  refreshToken      String?  @unique
+  ipAddress         String?
+  userAgent         String?
+  device            String?
+  isActive          Boolean  @default(true)
+  expiresAt         DateTime
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_sessions")
+}
+
+model AgencySession {
+  id                String   @id @default(cuid())
+  agencyId          String
+  sessionToken      String   @unique
+  refreshToken      String?  @unique
+  ipAddress         String?
+  userAgent         String?
+  device            String?
+  isActive          Boolean  @default(true)
+  expiresAt         DateTime
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  agency            Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+
+  @@map("agency_sessions")
+}
+
+// Social Authentication
+model SocialAccount {
+  id                String   @id @default(cuid())
+  userId            String
+  provider          SocialProvider
+  providerId        String
+  accessToken       String?
+  refreshToken      String?
+  expiresAt         DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerId])
+  @@map("social_accounts")
+}
+
+model AgencySocialAccount {
+  id                String   @id @default(cuid())
+  agencyId          String
+  provider          SocialProvider
+  providerId        String
+  accessToken       String?
+  refreshToken      String?
+  expiresAt         DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  agency            Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerId])
+  @@map("agency_social_accounts")
+}
+
+// MFA (Multi-Factor Authentication)
+model MfaBackupCode {
+  id                String   @id @default(cuid())
+  userId            String
+  code              String   @unique
+  isUsed            Boolean  @default(false)
+  usedAt            DateTime?
+  createdAt         DateTime @default(now())
+
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("mfa_backup_codes")
+}
+
+model AgencyMfaBackupCode {
+  id                String   @id @default(cuid())
+  agencyId          String
+  code              String   @unique
+  isUsed            Boolean  @default(false)
+  usedAt            DateTime?
+  createdAt         DateTime @default(now())
+
+  agency            Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+
+  @@map("agency_mfa_backup_codes")
+}
+
+// OAuth 2.0 / OIDC
+model OAuthClient {
+  id                String   @id @default(cuid())
+  clientId          String   @unique
+  clientSecret      String
+  name              String
+  description       String?
+  redirectUris      Json     @default("[]")
+  grants            Json     @default("[]")
+  scope             String?
+  userId            String?
+  agencyId          String?
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user              User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  agency            Agency?  @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  tokens            OAuthToken[]
+
+  @@map("oauth_clients")
+}
+
+model OAuthToken {
+  id                String   @id @default(cuid())
+  accessToken       String   @unique
+  refreshToken      String?  @unique
+  tokenType         String   @default("Bearer")
+  scope             String?
+  expiresAt         DateTime
+  userId            String?
+  agencyId          String?
+  clientId          String
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user              User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  agency            Agency?  @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  client            OAuthClient @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@map("oauth_tokens")
+}
+
+// Orders and Transactions (Basic structure for future modules)
+model Order {
+  id                String   @id @default(cuid())
+  orderNumber       String   @unique
+  userId            String?
+  agencyId          String?
+  status            OrderStatus @default(PENDING)
+  totalAmount       Decimal  @db.Decimal(10, 2)
+  currency          String   @default("USD")
+  metadata          Json     @default("{}")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user              User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  agency            Agency?  @relation(fields: [agencyId], references: [id], onDelete: SetNull)
+  transactions      Transaction[]
+
+  @@map("orders")
+}
+
+model Transaction {
+  id                String   @id @default(cuid())
+  transactionId     String   @unique
+  userId            String?
+  agencyId          String?
+  orderId           String?
+  type              TransactionType
+  amount            Decimal  @db.Decimal(10, 2)
+  currency          String   @default("USD")
+  status            TransactionStatus @default(PENDING)
+  paymentMethod     String?
+  gateway           String?
+  metadata          Json     @default("{}")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user              User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  agency            Agency?  @relation(fields: [agencyId], references: [id], onDelete: SetNull)
+  order             Order?   @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  @@map("transactions")
+}
+
+// Enums
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  BLOCKED
+  DORMANT
+  CLOSED
+}
+
+enum AgencyStatus {
+  PENDING
+  INACTIVE
+  ACTIVE
+  SUSPENDED
+  BLOCKED
+  DORMANT
+  CLOSED
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+  PREFER_NOT_TO_SAY
+}
+
+enum GovernmentIdType {
+  NATIONAL_ID
+  PASSPORT
+  DRIVING_LICENSE
+}
+
+enum AddressType {
+  PRIMARY
+  SECONDARY
+  BILLING
+  SHIPPING
+}
+
+enum BusinessType {
+  TECHNICAL
+  CONSTRUCTION
+  REAL_ESTATE
+  IMPORT_EXPORT
+  VISA_TRAVEL
+  SOLUTIONS
+}
+
+enum AgencyGrade {
+  A
+  B
+  C
+  D
+  E
+}
+
+enum EmployeeRange {
+  RANGE_01_30
+  RANGE_30_70
+  RANGE_70_150
+  RANGE_150_300
+  RANGE_300_500
+  RANGE_500_700
+  RANGE_700_1000_PLUS
+}
+
+enum SocialProvider {
+  GOOGLE
+  GITHUB
+  FACEBOOK
+  LINKEDIN
+  TWITTER
+}
+
+enum OrderStatus {
+  PENDING
+  PAYMENT
+  WAITING
+  WORKING
+  STOPPED
+  COMPLETE
+  DELIVERY
+  REFUND
+  CANCEL
+}
+
+enum TransactionType {
+  PAYMENT
+  REFUND
+  DEPOSIT
+  ANNUAL_FEE
+  PENALTY
+}
+
+enum TransactionStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+  DISPUTED
+  UNACCEPTABLE
+}
