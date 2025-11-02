@@ -6,7 +6,7 @@ export default () => ({
     frontendUrl: process.env.FRONTEND_URL || 'http://localhost:3001',
   },
   database: {
-    url: process.env.DATABASE_URL || 'mysql://root:password@localhost:3306/enterprise_sso',
+    url: process.env.DATABASE_URL || 'postgresql://postgres:password@localhost:5432/enterprise_sso',
   },
   jwt: {
     secret: process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-this-in-production',
@@ -17,7 +17,7 @@ export default () => ({
   redis: {
     host: process.env.REDIS_HOST || 'localhost',
     port: parseInt(process.env.REDIS_PORT) || 6379,
-    password: process.env.REDIS_PASSWORD || undefined,
+    password: process.env.REDIS_PASSWORD || 'password',
   },
   oauth: {
     google: {

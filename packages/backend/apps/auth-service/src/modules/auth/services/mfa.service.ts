@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../../database/prisma.service';
+import { SecurityService } from './security.service';
 import * as speakeasy from 'speakeasy';
 import * as QRCode from 'qrcode';
 
@@ -9,6 +10,7 @@ export class MfaService {
   constructor(
     private readonly configService: ConfigService,
     private readonly prisma: PrismaService,
+    private readonly securityService: SecurityService,
   ) {}
 
   async generateSecret(userId: string, accountType: string): Promise<{ secret: string; qrCodeUrl: string }> {
@@ -97,11 +99,11 @@ export class MfaService {
       return false;
     }
 
-    // TODO: Verify password using bcrypt
-    // const isValidPassword = await bcrypt.compare(password, user.passwordHash);
-    // if (!isValidPassword) {
-    //   return false;
-    // }
+    // Verify password
+    const isValidPassword = await this.securityService.verifyPassword(password, user.passwordHash);
+    if (!isValidPassword) {
+      return false;
+    }
 
     // Disable MFA
     if (accountType === 'user') {

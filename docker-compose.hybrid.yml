@@ -39,13 +39,14 @@ services:
     environment:
       NODE_ENV: development
       PORT: 3001
-      DATABASE_URL: mysql://root:password@mysql:3306/enterprise_sso
+      DATABASE_URL: postgresql://postgres:password@postgresql:5432/enterprise_sso
       JWT_SECRET: your-super-secret-jwt-key-change-this-in-production
       JWT_EXPIRES_IN: 15m
       JWT_REFRESH_SECRET: your-super-secret-refresh-jwt-key-change-this-in-production
       JWT_REFRESH_EXPIRES_IN: 7d
       REDIS_HOST: redis
       REDIS_PORT: 6379
+      REDIS_PASSWORD: password
       EMAIL_HOST: smtp.gmail.com
       EMAIL_PORT: 587
       EMAIL_USER: your-email@gmail.com
@@ -64,8 +65,10 @@ services:
     networks:
       - enterprise-network
     depends_on:
-      - mysql
-      - redis
+      postgresql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     restart: unless-stopped
     volumes:
       - ./packages/backend/apps/auth-service:/app
@@ -80,17 +83,20 @@ services:
     environment:
       NODE_ENV: development
       PORT: 3002
-      DATABASE_URL: mysql://root:password@mysql:3306/enterprise_users
+      DATABASE_URL: postgresql://postgres:password@postgresql:5432/enterprise_users
       JWT_SECRET: your-super-secret-jwt-key-change-this-in-production
       REDIS_HOST: redis
       REDIS_PORT: 6379
+      REDIS_PASSWORD: password
     ports:
       - "3002:3002"
     networks:
       - enterprise-network
     depends_on:
-      - mysql
-      - redis
+      postgresql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     restart: unless-stopped
 
   # Agency Service
@@ -102,17 +108,20 @@ services:
     environment:
       NODE_ENV: development
       PORT: 3003
-      DATABASE_URL: mysql://root:password@mysql:3306/enterprise_agencies
+      DATABASE_URL: postgresql://postgres:password@postgresql:5432/enterprise_agencies
       JWT_SECRET: your-super-secret-jwt-key-change-this-in-production
       REDIS_HOST: redis
       REDIS_PORT: 6379
+      REDIS_PASSWORD: password
     ports:
       - "3003:3003"
     networks:
       - enterprise-network
     depends_on:
-      - mysql
-      - redis
+      postgresql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     restart: unless-stopped
 
   # Order Service
@@ -124,17 +133,20 @@ services:
     environment:
       NODE_ENV: development
       PORT: 3004
-      DATABASE_URL: mysql://root:password@mysql:3306/enterprise_orders
+      DATABASE_URL: postgresql://postgres:password@postgresql:5432/enterprise_orders
       JWT_SECRET: your-super-secret-jwt-key-change-this-in-production
       REDIS_HOST: redis
       REDIS_PORT: 6379
+      REDIS_PASSWORD: password
     ports:
       - "3004:3004"
     networks:
       - enterprise-network
     depends_on:
-      - mysql
-      - redis
+      postgresql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     restart: unless-stopped
 
   # Chat Service
@@ -150,13 +162,16 @@ services:
       JWT_SECRET: your-super-secret-jwt-key-change-this-in-production
       REDIS_HOST: redis
       REDIS_PORT: 6379
+      REDIS_PASSWORD: password
     ports:
       - "3005:3005"
     networks:
       - enterprise-network
     depends_on:
-      - mongodb
-      - redis
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     restart: unless-stopped
 
   # Notification Service
@@ -168,17 +183,20 @@ services:
     environment:
       NODE_ENV: development
       PORT: 3006
-      DATABASE_URL: mysql://root:password@mysql:3306/enterprise_notifications
+      DATABASE_URL: postgresql://postgres:password@postgresql:5432/enterprise_notifications
       JWT_SECRET: your-super-secret-jwt-key-change-this-in-production
       REDIS_HOST: redis
       REDIS_PORT: 6379
+      REDIS_PASSWORD: password
     ports:
       - "3006:3006"
     networks:
       - enterprise-network
     depends_on:
-      - mysql
-      - redis
+      postgresql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     restart: unless-stopped
 
   # File Service
@@ -190,44 +208,52 @@ services:
     environment:
       NODE_ENV: development
       PORT: 3007
-      DATABASE_URL: mysql://root:password@mysql:3306/enterprise_files
+      DATABASE_URL: postgresql://postgres:password@postgresql:5432/enterprise_files
       JWT_SECRET: your-super-secret-jwt-key-change-this-in-production
       REDIS_HOST: redis
       REDIS_PORT: 6379
+      REDIS_PASSWORD: password
     ports:
       - "3007:3007"
     networks:
       - enterprise-network
     depends_on:
-      - mysql
-      - redis
+      postgresql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     restart: unless-stopped
 
-  # MySQL Database
-  mysql:
-    image: mysql:8.0
-    container_name: enterprise-mysql
+  # PostgreSQL Database (Primary Data - users, products, orders, payments)
+  postgresql:
+    image: postgres:18.0-alpine
+    container_name: enterprise-postgresql
     environment:
-      MYSQL_ROOT_PASSWORD: password
-      MYSQL_DATABASE: enterprise_platform
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_MULTIPLE_DATABASES: enterprise_sso,enterprise_users,enterprise_agencies
     ports:
-      - "3306:3306"
+      - "5432:5432"
     volumes:
-      - mysql_data:/var/lib/mysql
-      - ./packages/backend/database/migrations:/docker-entrypoint-initdb.d
+      - postgresql_data:/var/lib/postgresql/data
+      - ./packages/backend/database/migrations/init-postgresql.sh:/docker-entrypoint-initdb.d/init-multiple-databases.sh
     networks:
       - enterprise-network
     restart: unless-stopped
-    command: --default-authentication-plugin=mysql_native_password
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
-  # MongoDB Database
+  # MongoDB Database (Chat messages & conversations)
   mongodb:
     image: mongo:7.0
     container_name: enterprise-mongodb
     environment:
       MONGO_INITDB_ROOT_USERNAME: root
       MONGO_INITDB_ROOT_PASSWORD: password
-      MONGO_INITDB_DATABASE: enterprise_platform
+      MONGO_INITDB_DATABASE: enterprise_chat
     ports:
       - "27017:27017"
     volumes:
@@ -235,11 +261,18 @@ services:
     networks:
       - enterprise-network
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
-  # Redis Cache
+  # Redis Cache (Cache, sessions, cart data)
   redis:
     image: redis:7.2-alpine
     container_name: enterprise-redis
+    environment:
+      REDIS_PASSWORD: password
     ports:
       - "6379:6379"
     volumes:
@@ -247,7 +280,12 @@ services:
     networks:
       - enterprise-network
     restart: unless-stopped
-    command: redis-server --appendonly yes
+    command: redis-server --requirepass password --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
 
   # Prometheus Monitoring
   prometheus:
@@ -277,7 +315,7 @@ services:
     restart: unless-stopped
 
 volumes:
-  mysql_data:
+  postgresql_data:
   mongodb_data:
   redis_data:
   prometheus_data:

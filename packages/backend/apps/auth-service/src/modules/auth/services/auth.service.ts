@@ -1,14 +1,14 @@
 import { Injectable, ConflictException, UnauthorizedException, BadRequestException, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
-import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../../../database/prisma.service';
 import { RegisterDto, AgencyRegisterDto } from '../dto/register.dto';
-import { LoginDto, SocialLoginDto } from '../dto/login.dto';
+import { LoginDto } from '../dto/login.dto';
 import { AuthResponseDto, UserProfileDto, AgencyProfileDto } from '../dto/auth-response.dto';
 import { CustomJwtService } from './jwt.service';
 import { OtpService } from './otp.service';
 import { MfaService } from './mfa.service';
+import { SecurityService } from './security.service';
 
 @Injectable()
 export class AuthService {
@@ -19,6 +19,7 @@ export class AuthService {
     private readonly customJwtService: CustomJwtService,
     private readonly otpService: OtpService,
     private readonly mfaService: MfaService,
+    private readonly securityService: SecurityService,
   ) {}
 
   async registerUser(registerDto: RegisterDto): Promise<AuthResponseDto> {
@@ -38,8 +39,14 @@ export class AuthService {
       throw new ConflictException('User with this email or phone already exists');
     }
 
+    // Validate password strength
+    const validation = this.securityService.validatePasswordStrength(password);
+    if (!validation.isValid) {
+      throw new BadRequestException(validation.errors.join(', '));
+    }
+
     // Hash password
-    const passwordHash = await bcrypt.hash(password, 12);
+    const passwordHash = await this.securityService.hashPassword(password);
 
     // Create user
     const user = await this.prisma.user.create({
@@ -111,8 +118,14 @@ export class AuthService {
       throw new ConflictException('Agency name already exists');
     }
 
+    // Validate password strength
+    const validation = this.securityService.validatePasswordStrength(password);
+    if (!validation.isValid) {
+      throw new BadRequestException(validation.errors.join(', '));
+    }
+
     // Hash password
-    const passwordHash = await bcrypt.hash(password, 12);
+    const passwordHash = await this.securityService.hashPassword(password);
 
     // Create agency
     const agency = await this.prisma.agency.create({
@@ -177,6 +190,9 @@ export class AuthService {
   async loginUser(loginDto: LoginDto): Promise<AuthResponseDto> {
     const { email, password, mfaCode, accountType = 'user' } = loginDto;
 
+    // Check account lockout
+    await this.securityService.checkAccountLockout(email, 'user');
+
     // Find user
     const user = await this.prisma.user.findUnique({
       where: { email },
@@ -187,13 +203,18 @@ export class AuthService {
     });
 
     if (!user) {
+      await this.securityService.recordFailedAttempt(email, 'user');
       throw new UnauthorizedException('Invalid credentials');
     }
 
     // Check password
-    if (!user.passwordHash || !(await bcrypt.compare(password, user.passwordHash))) {
+    if (!user.passwordHash || !(await this.securityService.verifyPassword(password, user.passwordHash))) {
+      await this.securityService.recordFailedAttempt(email, 'user');
       throw new UnauthorizedException('Invalid credentials');
     }
+
+    // Reset failed attempts on successful password check
+    await this.securityService.resetFailedAttempts(email, 'user');
 
     // Check account status
     if (user.status === 'BLOCKED') {
@@ -248,6 +269,9 @@ export class AuthService {
   async loginAgency(loginDto: LoginDto): Promise<AuthResponseDto> {
     const { email, password, mfaCode, accountType = 'agency' } = loginDto;
 
+    // Check account lockout
+    await this.securityService.checkAccountLockout(email, 'agency');
+
     // Find agency
     const agency = await this.prisma.agency.findUnique({
       where: { email },
@@ -258,13 +282,18 @@ export class AuthService {
     });
 
     if (!agency) {
+      await this.securityService.recordFailedAttempt(email, 'agency');
       throw new UnauthorizedException('Invalid credentials');
     }
 
     // Check password
-    if (!agency.passwordHash || !(await bcrypt.compare(password, agency.passwordHash))) {
+    if (!agency.passwordHash || !(await this.securityService.verifyPassword(password, agency.passwordHash))) {
+      await this.securityService.recordFailedAttempt(email, 'agency');
       throw new UnauthorizedException('Invalid credentials');
     }
+
+    // Reset failed attempts on successful password check
+    await this.securityService.resetFailedAttempts(email, 'agency');
 
     // Check account status
     if (agency.status === 'BLOCKED') {
@@ -356,23 +385,97 @@ export class AuthService {
     };
   }
 
-  async logout(userId: string, refreshToken?: string): Promise<void> {
-    if (refreshToken) {
+  async logout(
+    userId: string,
+    accountType: string,
+    refreshToken?: string,
+    logoutType: string = 'current',
+  ): Promise<void> {
+    if (logoutType === 'all') {
+      // Invalidate all sessions
+      if (accountType === 'user') {
+        await this.prisma.userSession.updateMany({
+          where: { userId, isActive: true },
+          data: { isActive: false },
+        });
+      } else {
+        await this.prisma.agencySession.updateMany({
+          where: { agencyId: userId, isActive: true },
+          data: { isActive: false },
+        });
+      }
+    } else if (refreshToken) {
       // Invalidate specific refresh token
-      await this.prisma.userSession.deleteMany({
-        where: { refreshToken },
-      });
-      await this.prisma.agencySession.deleteMany({
-        where: { refreshToken },
-      });
+      if (accountType === 'user') {
+        await this.prisma.userSession.updateMany({
+          where: { userId, refreshToken, isActive: true },
+          data: { isActive: false },
+        });
+      } else {
+        await this.prisma.agencySession.updateMany({
+          where: { agencyId: userId, refreshToken, isActive: true },
+          data: { isActive: false },
+        });
+      }
     } else {
-      // Invalidate all sessions for user
-      await this.prisma.userSession.updateMany({
+      // Invalidate all sessions for user (fallback)
+      if (accountType === 'user') {
+        await this.prisma.userSession.updateMany({
+          where: { userId, isActive: true },
+          data: { isActive: false },
+        });
+      } else {
+        await this.prisma.agencySession.updateMany({
+          where: { agencyId: userId, isActive: true },
+          data: { isActive: false },
+        });
+      }
+    }
+  }
+
+  async getSessions(userId: string, accountType: string): Promise<any[]> {
+    if (accountType === 'user') {
+      const sessions = await this.prisma.userSession.findMany({
         where: { userId, isActive: true },
+        select: {
+          id: true,
+          sessionToken: true,
+          ipAddress: true,
+          userAgent: true,
+          device: true,
+          createdAt: true,
+          expiresAt: true,
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+      return sessions;
+    } else {
+      const sessions = await this.prisma.agencySession.findMany({
+        where: { agencyId: userId, isActive: true },
+        select: {
+          id: true,
+          sessionToken: true,
+          ipAddress: true,
+          userAgent: true,
+          device: true,
+          createdAt: true,
+          expiresAt: true,
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+      return sessions;
+    }
+  }
+
+  async revokeSession(userId: string, accountType: string, sessionId: string): Promise<void> {
+    if (accountType === 'user') {
+      await this.prisma.userSession.updateMany({
+        where: { id: sessionId, userId, isActive: true },
         data: { isActive: false },
       });
+    } else {
       await this.prisma.agencySession.updateMany({
-        where: { agencyId: userId, isActive: true },
+        where: { id: sessionId, agencyId: userId, isActive: true },
         data: { isActive: false },
       });
     }
@@ -439,5 +542,66 @@ export class AuthService {
       return this.loginAgency({ email: emailOrPhone, password, accountType: 'agency' });
     }
     return this.loginUser({ email: emailOrPhone, password, accountType: 'user' });
+  }
+
+  async changePassword(
+    userId: string,
+    accountType: string,
+    changePasswordDto: { currentPassword: string; newPassword: string; confirmPassword: string },
+  ): Promise<{ message: string }> {
+    const { currentPassword, newPassword, confirmPassword } = changePasswordDto;
+
+    if (newPassword !== confirmPassword) {
+      throw new BadRequestException('New password and confirm password do not match');
+    }
+
+    // Validate password strength
+    const validation = this.securityService.validatePasswordStrength(newPassword);
+    if (!validation.isValid) {
+      throw new BadRequestException(validation.errors.join(', '));
+    }
+
+    // Get user or agency
+    let user;
+    if (accountType === 'user') {
+      user = await this.prisma.user.findUnique({
+        where: { id: userId },
+      });
+    } else {
+      user = await this.prisma.agency.findUnique({
+        where: { id: userId },
+      });
+    }
+
+    if (!user || !user.passwordHash) {
+      throw new NotFoundException('User not found');
+    }
+
+    // Verify current password
+    const isValidPassword = await this.securityService.verifyPassword(
+      currentPassword,
+      user.passwordHash,
+    );
+    if (!isValidPassword) {
+      throw new UnauthorizedException('Current password is incorrect');
+    }
+
+    // Hash new password
+    const newPasswordHash = await this.securityService.hashPassword(newPassword);
+
+    // Update password
+    if (accountType === 'user') {
+      await this.prisma.user.update({
+        where: { id: userId },
+        data: { passwordHash: newPasswordHash },
+      });
+    } else {
+      await this.prisma.agency.update({
+        where: { id: userId },
+        data: { passwordHash: newPasswordHash },
+      });
+    }
+
+    return { message: 'Password changed successfully' };
   }
 }

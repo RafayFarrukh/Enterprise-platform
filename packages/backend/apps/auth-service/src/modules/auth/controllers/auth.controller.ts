@@ -1,4 +1,4 @@
-import { Controller, Post, Body, Get, UseGuards, Request, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Post, Body, Get, Delete, Param, UseGuards, Request, HttpCode, HttpStatus } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { AuthService } from '../services/auth.service';
 import { MfaService } from '../services/mfa.service';
@@ -6,7 +6,7 @@ import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { Public } from '../decorators/public.decorator';
 import { CurrentUser } from '../decorators/current-user.decorator';
 import { RegisterDto, AgencyRegisterDto } from '../dto/register.dto';
-import { LoginDto, SocialLoginDto, RefreshTokenDto, LogoutDto } from '../dto/login.dto';
+import { LoginDto, RefreshTokenDto, LogoutDto } from '../dto/login.dto';
 import { EnableMfaDto, VerifyMfaDto, DisableMfaDto, GenerateBackupCodesDto } from '../dto/mfa.dto';
 import { ForgotPasswordDto, ResetPasswordDto, ChangePasswordDto, VerifyEmailDto, ResendVerificationDto } from '../dto/password.dto';
 import { AuthResponseDto, UserProfileDto, AgencyProfileDto, MfaSetupResponseDto } from '../dto/auth-response.dto';
@@ -66,8 +66,26 @@ export class AuthController {
   @ApiOperation({ summary: 'Logout user or agency' })
   @ApiResponse({ status: 200, description: 'Logout successful' })
   async logout(@CurrentUser() user: any, @Body() logoutDto: LogoutDto): Promise<{ message: string }> {
-    await this.authService.logout(user.id, logoutDto.refreshToken);
+    const logoutType = logoutDto.logoutType || 'current';
+    await this.authService.logout(user.id, user.accountType, logoutDto.refreshToken, logoutType);
     return { message: 'Logout successful' };
+  }
+
+  @Get('sessions')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get all active sessions' })
+  @ApiResponse({ status: 200, description: 'Sessions retrieved successfully' })
+  async getSessions(@CurrentUser() user: any): Promise<any> {
+    return this.authService.getSessions(user.id, user.accountType);
+  }
+
+  @Delete('sessions/:sessionId')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Revoke a specific session' })
+  @ApiResponse({ status: 200, description: 'Session revoked successfully' })
+  async revokeSession(@CurrentUser() user: any, @Param('sessionId') sessionId: string): Promise<{ message: string }> {
+    await this.authService.revokeSession(user.id, user.accountType, sessionId);
+    return { message: 'Session revoked successfully' };
   }
 
   @Get('profile')
@@ -174,8 +192,7 @@ export class AuthController {
   @ApiOperation({ summary: 'Change password' })
   @ApiResponse({ status: 200, description: 'Password changed successfully' })
   async changePassword(@CurrentUser() user: any, @Body() changePasswordDto: ChangePasswordDto): Promise<{ message: string }> {
-    // TODO: Implement password change logic
-    return { message: 'Password changed successfully' };
+    return this.authService.changePassword(user.id, user.accountType, changePasswordDto);
   }
 
   // Email Verification Endpoints

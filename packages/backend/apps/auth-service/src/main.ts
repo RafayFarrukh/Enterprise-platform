@@ -28,10 +28,9 @@ async function bootstrap() {
   // Swagger documentation
   const config = new DocumentBuilder()
     .setTitle('SSO Authentication Service')
-    .setDescription('OAuth 2.0/OIDC Authentication Service for Enterprise Platform')
+    .setDescription('Authentication & Authorization Service for Enterprise Platform')
     .setVersion('1.0')
     .addBearerAuth()
-    .addOAuth2()
     .build();
   
   const document = SwaggerModule.createDocument(app, config);

@@ -13,6 +13,8 @@ import { AuthService } from './services/auth.service';
 import { CustomJwtService } from './services/jwt.service';
 import { OtpService } from './services/otp.service';
 import { MfaService } from './services/mfa.service';
+import { RbacService } from './services/rbac.service';
+import { SecurityService } from './services/security.service';
 
 // Strategies
 import { LocalStrategy } from './strategies/local.strategy';
@@ -22,6 +24,7 @@ import { JwtStrategy } from './strategies/jwt.strategy';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
 import { MfaGuard } from './guards/mfa.guard';
+import { PermissionsGuard } from './guards/permissions.guard';
 
 @Module({
   imports: [
@@ -45,6 +48,8 @@ import { MfaGuard } from './guards/mfa.guard';
     CustomJwtService,
     OtpService,
     MfaService,
+    RbacService,
+    SecurityService,
     
     // Strategies
     LocalStrategy,
@@ -54,15 +59,19 @@ import { MfaGuard } from './guards/mfa.guard';
     JwtAuthGuard,
     RolesGuard,
     MfaGuard,
+    PermissionsGuard,
   ],
   exports: [
     AuthService,
     CustomJwtService,
     OtpService,
     MfaService,
+    RbacService,
+    SecurityService,
     JwtAuthGuard,
     RolesGuard,
     MfaGuard,
+    PermissionsGuard,
   ],
 })
 export class AuthModule {}

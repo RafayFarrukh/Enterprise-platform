@@ -27,21 +27,6 @@ export class LoginDto {
   rememberMe?: string;
 }
 
-export class SocialLoginDto {
-  @ApiProperty({ example: 'google' })
-  @IsEnum(['google', 'github', 'facebook', 'linkedin'])
-  provider: string;
-
-  @ApiProperty({ example: 'social-auth-code' })
-  @IsString()
-  code: string;
-
-  @ApiPropertyOptional({ example: 'user' })
-  @IsOptional()
-  @IsEnum(['user', 'agency'])
-  accountType?: string;
-}
-
 export class RefreshTokenDto {
   @ApiProperty({ example: 'refresh-token-here' })
   @IsString()

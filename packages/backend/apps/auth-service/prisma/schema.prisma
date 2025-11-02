@@ -6,7 +6,7 @@ generator client {
 }
 
 datasource db {
-  provider = "mysql"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -32,10 +32,12 @@ model User {
   
   // Authentication
   sessions          UserSession[]
-  socialAccounts    SocialAccount[]
   mfaBackupCodes    MfaBackupCode[]
   
-  // OAuth
+  // Authorization
+  roles             UserRole[]
+  
+  // OAuth (for OAuth provider functionality, not social login)
   oauthClients      OAuthClient[]
   oauthTokens       OAuthToken[]
   
@@ -122,10 +124,12 @@ model Agency {
   
   // Authentication
   sessions          AgencySession[]
-  socialAccounts    AgencySocialAccount[]
   mfaBackupCodes    AgencyMfaBackupCode[]
   
-  // OAuth
+  // Authorization
+  roles             AgencyRole[]
+  
+  // OAuth (for OAuth provider functionality, not social login)
   oauthClients      OAuthClient[]
   oauthTokens       OAuthToken[]
   
@@ -245,39 +249,112 @@ model AgencySession {
   @@map("agency_sessions")
 }
 
-// Social Authentication
-model SocialAccount {
+// Authorization & RBAC System
+model Role {
   id                String   @id @default(cuid())
-  userId            String
-  provider          SocialProvider
-  providerId        String
-  accessToken       String?
-  refreshToken      String?
-  expiresAt         DateTime?
+  name              String   @unique
+  description       String?
+  isSystemRole      Boolean  @default(false)
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
-  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  permissions       RolePermission[]
+  userRoles         UserRole[]
+  agencyRoles       AgencyRole[]
 
-  @@unique([provider, providerId])
-  @@map("social_accounts")
+  @@map("roles")
 }
 
-model AgencySocialAccount {
+model Permission {
   id                String   @id @default(cuid())
-  agencyId          String
-  provider          SocialProvider
-  providerId        String
-  accessToken       String?
-  refreshToken      String?
-  expiresAt         DateTime?
+  name              String   @unique
+  resource          String   // e.g., 'user', 'agency', 'order', 'admin'
+  action            String   // e.g., 'create', 'read', 'update', 'delete', 'manage'
+  description       String?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
-  agency            Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  rolePermissions   RolePermission[]
 
-  @@unique([provider, providerId])
-  @@map("agency_social_accounts")
+  @@map("permissions")
+}
+
+model RolePermission {
+  id                String   @id @default(cuid())
+  roleId            String
+  permissionId      String
+  createdAt         DateTime @default(now())
+
+  role              Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission        Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model UserRole {
+  id                String   @id @default(cuid())
+  userId            String
+  roleId            String
+  assignedAt        DateTime @default(now())
+  assignedBy        String?
+  expiresAt         DateTime?
+
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role              Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId])
+  @@map("user_roles")
+}
+
+model AgencyRole {
+  id                String   @id @default(cuid())
+  agencyId          String
+  roleId            String
+  assignedAt        DateTime @default(now())
+  assignedBy        String?
+  expiresAt         DateTime?
+
+  agency            Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  role              Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([agencyId, roleId])
+  @@map("agency_roles")
+}
+
+// Security & Audit
+model AccountLockout {
+  id                String   @id @default(cuid())
+  userId            String?
+  agencyId          String?
+  accountType       String   // 'user' or 'agency'
+  email             String
+  failedAttempts    Int      @default(0)
+  lockedUntil       DateTime?
+  lastAttemptAt     DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([email, accountType])
+  @@map("account_lockouts")
+}
+
+model ActivityLog {
+  id                String   @id @default(cuid())
+  userId            String?
+  agencyId          String?
+  accountType       String
+  action            String   // e.g., 'login', 'logout', 'password_change', 'role_assigned'
+  resource          String?  // e.g., 'user', 'order'
+  resourceId        String?
+  ipAddress         String?
+  userAgent         String?
+  details           Json     @default("{}")
+  success           Boolean  @default(true)
+  errorMessage      String?
+  createdAt         DateTime @default(now())
+
+  @@map("activity_logs")
 }
 
 // MFA (Multi-Factor Authentication)
@@ -459,13 +536,6 @@ enum EmployeeRange {
   RANGE_700_1000_PLUS
 }
 
-enum SocialProvider {
-  GOOGLE
-  GITHUB
-  FACEBOOK
-  LINKEDIN
-  TWITTER
-}
 
 enum OrderStatus {
   PENDING

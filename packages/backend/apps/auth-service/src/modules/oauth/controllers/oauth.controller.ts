@@ -16,52 +16,6 @@ export class OAuthController {
   ) {}
 
   @Public()
-  @Get('google')
-  @UseGuards(AuthGuard('google'))
-  @ApiOperation({ summary: 'Google OAuth login' })
-  @ApiResponse({ status: 302, description: 'Redirect to Google OAuth' })
-  async googleAuth(@Request() req) {
-    // This will redirect to Google
-  }
-
-  @Public()
-  @Get('google/callback')
-  @UseGuards(AuthGuard('google'))
-  @ApiOperation({ summary: 'Google OAuth callback' })
-  @ApiResponse({ status: 200, description: 'Google OAuth successful' })
-  async googleAuthCallback(@Request() req, @Res() res: Response) {
-    const user = await this.oauthService.validateGoogleUser(req.user);
-    const tokens = await this.oauthService.generateTokens(user.id, user.accountType);
-    
-    // Redirect to frontend with tokens
-    const redirectUrl = `${process.env.FRONTEND_URL}/auth/callback?access_token=${tokens.accessToken}&refresh_token=${tokens.refreshToken}`;
-    res.redirect(redirectUrl);
-  }
-
-  @Public()
-  @Get('github')
-  @UseGuards(AuthGuard('github'))
-  @ApiOperation({ summary: 'GitHub OAuth login' })
-  @ApiResponse({ status: 302, description: 'Redirect to GitHub OAuth' })
-  async githubAuth(@Request() req) {
-    // This will redirect to GitHub
-  }
-
-  @Public()
-  @Get('github/callback')
-  @UseGuards(AuthGuard('github'))
-  @ApiOperation({ summary: 'GitHub OAuth callback' })
-  @ApiResponse({ status: 200, description: 'GitHub OAuth successful' })
-  async githubAuthCallback(@Request() req, @Res() res: Response) {
-    const user = await this.oauthService.validateGitHubUser(req.user);
-    const tokens = await this.oauthService.generateTokens(user.id, user.accountType);
-    
-    // Redirect to frontend with tokens
-    const redirectUrl = `${process.env.FRONTEND_URL}/auth/callback?access_token=${tokens.accessToken}&refresh_token=${tokens.refreshToken}`;
-    res.redirect(redirectUrl);
-  }
-
-  @Public()
   @Get('authorize')
   @ApiOperation({ summary: 'OAuth 2.0 authorization endpoint' })
   @ApiQuery({ name: 'response_type', description: 'Response type (code)' })

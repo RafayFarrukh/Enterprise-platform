@@ -10,9 +10,10 @@ services:
       - PORT=3001
       - API_PREFIX=api/v1
       - FRONTEND_URL=http://localhost:3001
-      - DATABASE_URL=mysql://root:password@mysql:3306/enterprise_sso
+      - DATABASE_URL=postgresql://postgres:password@postgresql:5432/enterprise_sso
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+      - REDIS_PASSWORD=password
       - JWT_SECRET=your-super-secret-jwt-key-change-this-in-production
       - JWT_EXPIRES_IN=15m
       - JWT_REFRESH_SECRET=your-super-secret-refresh-jwt-key-change-this-in-production
@@ -22,33 +23,47 @@ services:
       - GITHUB_CLIENT_ID=your-github-client-id
       - GITHUB_CLIENT_SECRET=your-github-client-secret
     depends_on:
-      - mysql
-      - redis
+      postgresql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     volumes:
       - .:/app
       - /app/node_modules
     command: npm run start:dev
 
-  mysql:
-    image: mysql:8.0
+  postgresql:
+    image: postgres:18.0-alpine
     ports:
-      - "3306:3306"
+      - "5432:5432"
     environment:
-      - MYSQL_ROOT_PASSWORD=password
-      - MYSQL_DATABASE=enterprise_sso
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_MULTIPLE_DATABASES=enterprise_sso
     volumes:
-      - mysql_data:/var/lib/mysql
-      - ./prisma/schema.prisma:/docker-entrypoint-initdb.d/schema.sql
-    command: --default-authentication-plugin=mysql_native_password
+      - postgresql_data:/var/lib/postgresql/data
+      - ../../database/migrations/init-postgresql.sh:/docker-entrypoint-initdb.d/init-postgresql.sh
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   redis:
-    image: redis:7-alpine
+    image: redis:7.2-alpine
     ports:
       - "6379:6379"
+    environment:
+      - REDIS_PASSWORD=password
     volumes:
       - redis_data:/data
-    command: redis-server --appendonly yes
+    command: redis-server --requirepass password --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
 
 volumes:
-  mysql_data:
+  postgresql_data:
   redis_data:

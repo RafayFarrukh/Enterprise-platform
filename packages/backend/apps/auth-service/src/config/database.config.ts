@@ -1,5 +1,5 @@
 export default () => ({
   database: {
-    url: process.env.DATABASE_URL || 'mysql://root:password@localhost:3306/enterprise_sso',
+    url: process.env.DATABASE_URL || 'postgresql://postgres:password@localhost:5432/enterprise_sso',
   },
 });
