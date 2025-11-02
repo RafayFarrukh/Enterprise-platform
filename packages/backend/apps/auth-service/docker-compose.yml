@@ -52,18 +52,37 @@ services:
   redis:
     image: redis:7.2-alpine
     ports:
-      - "6379:6379"
+      - "6380:6379"  # Changed external port to 6380 to avoid conflict with local Redis
     environment:
       - REDIS_PASSWORD=password
     volumes:
       - redis_data:/data
     command: redis-server --requirepass password --appendonly yes
     healthcheck:
-      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      test: ["CMD", "redis-cli", "-a", "password", "ping"]
       interval: 10s
       timeout: 3s
       retries: 5
 
+  # pgAdmin - PostgreSQL Administration Tool
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: enterprise-pgadmin
+    ports:
+      - "5050:80"
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=admin@enterprise.com
+      - PGADMIN_DEFAULT_PASSWORD=admin
+      - PGADMIN_CONFIG_SERVER_MODE=False
+      - PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED=False
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      postgresql:
+        condition: service_healthy
+    restart: unless-stopped
+
 volumes:
   postgresql_data:
   redis_data:
+  pgadmin_data:

@@ -4,21 +4,21 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { PrismaService } from '../../database/prisma.service';
 
+// Import AuthModule to get SecurityService and other dependencies
+import { AuthModule } from '../auth/auth.module';
+
 // Controllers
 import { OAuthController } from './controllers/oauth.controller';
 
 // Services
 import { OAuthService } from './services/oauth.service';
-import { CustomJwtService } from '../auth/services/jwt.service';
-import { AuthService } from '../auth/services/auth.service';
-import { OtpService } from '../auth/services/otp.service';
-import { MfaService } from '../auth/services/mfa.service';
 
 // Strategies removed - social login disabled
 
 @Module({
   imports: [
     PassportModule,
+    AuthModule, // Import AuthModule to get SecurityService, AuthService, etc.
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => ({
@@ -35,10 +35,6 @@ import { MfaService } from '../auth/services/mfa.service';
     // Services
     PrismaService,
     OAuthService,
-    CustomJwtService,
-    AuthService,
-    OtpService,
-    MfaService,
     
     // Strategies removed - social login disabled
   ],
